@@ -1,8 +1,17 @@
-# Robowoo
+=== RoboWoo — Robokassa payment gateway for WooCommerce  ===
+Contributors: Ivan Artamonov
+Author URI: https://artamonoviv.ru
+Plugin URI: https://github.com/artamonoviv/robowoo
+Tags: robocassa, robokassa, visa, mastercard, visa, woo commerce, woocommerce, ecommerce, gateway, woo robokassa, robo, merchant, woo, woo robo
+Requires at least: 4.0
+Tested up to: 4.9.6
+Stable tag: trunk
+License: GPLv2 or later
+License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
 Provides a Robokassa gateway for WooCommerce. Supports russian law 54-FZ
 
-## Описание ##
+== Description ==
 
 RoboWoo расширяет платежные способности WooCommerce добавлением шлюза Робокассы. Плагин поддерживает Робочеки - нововведения, обеспечивающие соблюдение закона 54-ФЗ об электронных чеках. 
 
@@ -14,13 +23,13 @@ RoboWoo расширяет платежные способности WooCommerce
 * Выбирать систему налогооблажения для передачи в Робокассу
 * Выбирать размер ставки НДС для товаров в заказе
 
-## Настройка ##
+== Docs & Support ==
 
 После активации плагин управляется через настройки платежей WooCommerce (WooCommerce - Настройки - Платежи - Робокасса) 
 
 Настройка платежей состоит из двух этапов. 
 
-### 1. Настройка Робокассы ###
+1. Настройка Робокассы
 
 В технических настройках магазина в Робокассе необходимо прописать следующие параметры: 
 * Result URL: http://[адрес_магазина]/?wc-api=wc_robokassa&robokassa=result
@@ -29,7 +38,7 @@ RoboWoo расширяет платежные способности WooCommerce
 
 Выбрать метод отсылки данных везде: POST
 
-### 2. Настройка плагина ###
+2. Настройка плагина
 
 В настройках плагина (WooCommerce - Настройки - Платежи - Робокасса) ввести: 
 * Идентификатор магазина из технических настроек магазина Робокассы
@@ -47,14 +56,14 @@ RoboWoo расширяет платежные способности WooCommerce
 
 Если необходимо, чтобы плагин вел журнал работы с клиентом и Робокассой, поставьте флажок "Записывать все действия в журнал"
 
-## Установка ##
+== Installation ==
 
-1. Распакуйте архив и/или скопируйте папку "robowoo" в каталог "/wp-content/plugins/" вашего сайта.
+1. Распакуйте архив и скопируйте папку "robowoo" в каталог "/wp-content/plugins/" вашего сайта.
 2. Активируйте плагин в меню 'Плагины' WordPress.
 3. Плагин управляется через настройки платежей WooCommerce (WooCommerce - Настройки - Платежи - Робокасса) 
 
-## Изменения ##
+== Changelog ==
 
-### 1.0 ###
+= 1.0 =
 
 * Релиз плагина
