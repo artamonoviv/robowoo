@@ -2,7 +2,7 @@
 /*
   Plugin Name: RoboWoo — Robokassa payment gateway for WooCommerce
   Description: Provides a <a href="https://www.robokassa.ru" target="_blank">Robokassa</a> gateway for WooCommerce. Supports russian law 54-FZ
-  Version: 1.0
+  Version: 1.0.2
   Author: Ivan Artamonov
   Author URI: https://artamonoviv.ru
   Plugin URI: https://github.com/artamonoviv/robowoo
@@ -54,6 +54,7 @@ function init_woocommerce_robokassa()
 			$this->testmode =            ( isset( $this->settings['testmode'] ) ) ? $this->settings['testmode'] : '';
 			$this->receipt =             ( isset( $this->settings['receipt'] ) ) ? $this->settings['receipt'] : '';
 			$this->sno_enabled =         ( isset( $this->settings['sno_enabled'] ) ) ? $this->settings['sno_enabled'] : '';
+			$this->include_shipping =    ( isset( $this->settings['include_shipping'] ) ) ? $this->settings['include_shipping'] : '';
 			$this->sno =                 ( isset( $this->settings['sno'] ) ) ? $this->settings['sno'] : '';
 			$this->tax =                 ( isset( $this->settings['tax'] ) ) ? $this->settings['tax'] : 'none';
 			$this->if_fail =             ( isset( $this->settings['if_fail'] ) ) ? $this->settings['if_fail'] : 'retry';
@@ -170,7 +171,14 @@ function init_woocommerce_robokassa()
 							'retry' => 'Вывести окно с запросом повторной попытки оплаты',
 							'cancel' => 'Отменить заказ, и сказать клиенту об этом'
 						)
-					),					
+					),
+					'include_shipping' => array(
+						'title' => 'Доставка в чеке',
+						'type' => 'checkbox', 
+						'label' => 'Включена',
+						'description' => 'Включать доставку как отдельную позицию в чек? (Работает только в том случае, если стоимость доставки в заказе клиента ненулевая. Информация берется из раздела "Доставка" WooCommerce)',
+						'default' => 'no'
+					),			
 					'tax' => array(
 						'title' => 'Налог для чека',
 						'type' => 'select', 
@@ -251,7 +259,7 @@ function init_woocommerce_robokassa()
 			$order = wc_get_order( $order_id ); 
 			
 			$items=array();
-			foreach ( $order->get_items() as $item_id => $item_data )
+			foreach ( $order->get_items('line_item') as $item_id => $item_data )
 			{
 				$product = $item_data->get_product();
 				array_push (
@@ -263,13 +271,32 @@ function init_woocommerce_robokassa()
 						'tax'=>      $this->tax
 					)
 				);
-			}		
+			}		;
+			
+			if( $this->include_shipping == 'yes' ) {				
+				foreach ( $order->get_items( 'shipping' ) as $item_id => $item_data )
+				{
+					if ($item_data->get_total() != 0)
+					{
+						array_push (
+							$items, 
+							array(
+								'name'=>     $item_data->get_name(),
+								'quantity'=> 1,
+								'sum' =>     $item_data->get_total(),
+								'tax'=>      $this->tax
+							)
+						);
+					}
+				}
+			}
+			
 			$arr = array( 'items' => $items );
 			
 			if( $this->sno_enabled == 'yes' ) {
-				$arr[sno] = $this->sno;
+				$arr['sno'] = $this->sno;
 			}
-			
+						
 			return urlencode(json_encode($arr, JSON_UNESCAPED_UNICODE));
 		}	
 
