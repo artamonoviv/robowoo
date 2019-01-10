@@ -2,7 +2,7 @@
 /*
   Plugin Name: RoboWoo — Robokassa payment gateway for WooCommerce
   Description: Provides a <a href="https://www.robokassa.ru" target="_blank">Robokassa</a> gateway for WooCommerce. Supports russian law 54-FZ
-  Version: 1.0.2
+  Version: 1.0.3
   Author: Ivan Artamonov
   Author URI: https://artamonoviv.ru
   Plugin URI: https://github.com/artamonoviv/robowoo
@@ -57,6 +57,8 @@ function init_woocommerce_robokassa()
 			$this->include_shipping =    ( isset( $this->settings['include_shipping'] ) ) ? $this->settings['include_shipping'] : '';
 			$this->sno =                 ( isset( $this->settings['sno'] ) ) ? $this->settings['sno'] : '';
 			$this->tax =                 ( isset( $this->settings['tax'] ) ) ? $this->settings['tax'] : 'none';
+			$this->payment_method =      ( isset( $this->settings['payment_method'] ) ) ? $this->settings['payment_method'] : 'full_prepayment';
+			$this->payment_object =      ( isset( $this->settings['payment_object'] ) ) ? $this->settings['payment_object'] : 'commodity';
 			$this->if_fail =             ( isset( $this->settings['if_fail'] ) ) ? $this->settings['if_fail'] : 'retry';
 			$this->lang =                ( isset( $this->settings['lang'] ) ) ? $this->settings['lang'] : 'ru';		
 			$this->description =         ( isset( $this->settings['description'] ) ) ? $this->settings['description'] : '';
@@ -178,7 +180,48 @@ function init_woocommerce_robokassa()
 						'label' => 'Включена',
 						'description' => 'Включать доставку как отдельную позицию в чек? (Работает только в том случае, если стоимость доставки в заказе клиента ненулевая. Информация берется из раздела "Доставка" WooCommerce)',
 						'default' => 'no'
-					),			
+					),	
+					'payment_method' => array(
+						'title' => 'Признак способа расчёта',
+						'type' => 'select', 
+						'description' => 'Способ расчета, который будет передан в чек. Обычно достаточно указать "Предоплата 100%". Полное описание полей находится на сайте Робокассы: <a href="https://docs.robokassa.ru/#7508">https://docs.robokassa.ru/#7508</a>',
+						'default' => 'full_prepayment',
+						'options' => array(
+							'full_prepayment' => 'Предоплата 100%',
+							'prepayment' => 'Частичная предоплата',
+							'advance' => 'Аванс',
+							'full_payment' => 'Полный расчет',
+							'partial_payment' => 'Частичный расчёт и кредит',
+							'credit' => 'Передача в кредит',
+							'credit_payment' => 'Оплата кредита'
+						)
+					),	
+					'payment_object' => array(
+						'title' => 'Признак предмета расчёта',
+						'type' => 'select', 
+						'description' => 'О предмете какого типа был расчет. Обычно это "Товар". Полное описание полей находится на сайте Робокассы: <a href="https://docs.robokassa.ru/#7509">https://docs.robokassa.ru/#7509</a>',
+						'default' => 'commodity',
+						'options' => array(
+							'commodity' => 'Товар',
+							'excise' => 'Подакцизный товар',
+							'job' => 'Работа',
+							'service' => 'Услуга',
+							'gambling_bet' => 'Ставка азартной игры',
+							'gambling_prize' => 'Выигрыш азартной игры',
+							'lottery' => 'Лотерейный билет',
+							'lottery_prize' => 'Выигрыш лотереи',
+							'intellectual_activity' => 'Результаты интеллектуальной деятельности',
+							'payment' => 'Платеж',
+							'agent_commission' => 'Агентское вознаграждение',
+							'composite' => 'Составной предмет расчета',
+							'another' => 'Иной предмет расчета',
+							'property_right' => 'Имущественное право',
+							'non-operating_gain' => 'Внереализационный доход',
+							'insurance_premium' => 'Страховые взносы',
+							'sales_tax' => 'Торговый сбор',
+							'resort_fee' => 'Курортный сбор'
+						)
+					),					
 					'tax' => array(
 						'title' => 'Налог для чека',
 						'type' => 'select', 
@@ -268,6 +311,8 @@ function init_woocommerce_robokassa()
 						'name'=>     $product->get_name(),
 						'quantity'=> $item_data->get_quantity(),
 						'sum' =>     $item_data->get_total(),
+						'payment_method'=>$this->payment_method,
+						'payment_object'=>$this->payment_object,
 						'tax'=>      $this->tax
 					)
 				);
