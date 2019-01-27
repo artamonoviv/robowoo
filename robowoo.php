@@ -2,7 +2,7 @@
 /*
   Plugin Name: RoboWoo — Robokassa payment gateway for WooCommerce
   Description: Provides a <a href="https://www.robokassa.ru" target="_blank">Robokassa</a> gateway for WooCommerce. Supports russian law 54-FZ
-  Version: 1.0.3
+  Version: 1.0.4
   Author: Ivan Artamonov
   Author URI: https://artamonoviv.ru
   Plugin URI: https://github.com/artamonoviv/robowoo
@@ -425,7 +425,7 @@ function init_woocommerce_robokassa()
 					$out_summ = $_POST['OutSum'];
 					$order = wc_get_order($inv_id);
 
-					if ( $order->status == 'completed' ) {
+					if ( !is_object($order) || $order->status == 'completed' ) {
 						exit;
 					}
 
@@ -448,8 +448,19 @@ function init_woocommerce_robokassa()
 				
 				$order = wc_get_order($inv_id);
 				
-				WC()->cart->empty_cart();
+				if ( !is_object($order) ) {
+					
+					if ( $this->debug == 'yes' ) {
+						$this->log->add( $this->id,'Робокасса вернула заказ №'.$inv_id.', но WooCommerce не нашел заказ с таким номером!');
+					}
+					
+					$url = wc_get_account_endpoint_url( 'orders' );
+					wp_redirect( str_replace( '&amp;', '&', $url ) );
+					exit;
+				}
 				
+				WC()->cart->empty_cart();				
+
 				$url = $order->get_checkout_order_received_url();
 				
 				if ( $this->debug == 'yes' ) {
@@ -461,7 +472,19 @@ function init_woocommerce_robokassa()
 			elseif ( isset($_GET['robokassa']) AND $_GET['robokassa'] == 'fail' ) {
 				
 				$order = wc_get_order($inv_id);
-
+				
+				if (!is_object($order)) {
+					
+					if ( $this->debug == 'yes' ) {
+						$this->log->add( $this->id,'Робокасса вернула заказ №'.$inv_id.', но WooCommerce не нашел заказ с таким номером!');
+					}
+					
+					$url = wc_get_account_endpoint_url( 'orders' );
+					wp_redirect( str_replace( '&amp;', '&', $url ) );
+					exit;
+					
+				}
+				
 				$order->add_order_note('Платеж не прошел: Робокасса сообщает об ошибке!');
 				
 				if ( $this->debug == 'yes' ) {
@@ -469,11 +492,11 @@ function init_woocommerce_robokassa()
 				}
 				
 				if( $this->if_fail == 'retry' ) {
-					wp_redirect( str_replace('&amp;', '&', $order->get_checkout_payment_url() ) );
+					wp_redirect( str_replace( '&amp;', '&', $order->get_checkout_payment_url() ) );
 				}
 				else{	
 					$order->update_status('failed', 'Платеж не прошел');				
-					wp_redirect( str_replace('&amp;', '&', $order->get_cancel_order_url() ) );
+					wp_redirect( str_replace( '&amp;', '&', $order->get_cancel_order_url() ) );
 				}			
 			}
 			exit;
