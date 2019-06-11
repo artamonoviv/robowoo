@@ -5,7 +5,7 @@ Plugin URI: https://github.com/artamonoviv/robowoo
 Tags: robocassa, robokassa, visa, mastercard, visa, woo commerce, woocommerce, ecommerce, gateway, woo robokassa, robo, merchant, woo, woo robo
 Requires at least: 4.0
 Requires PHP: 5.4.0
-Tested up to: 5.0.0
+Tested up to: 5.2.1
 Stable tag: trunk
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
