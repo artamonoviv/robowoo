@@ -2,7 +2,7 @@
 /*
   Plugin Name: RoboWoo — Robokassa payment gateway for WooCommerce
   Description: Provides a <a href="https://www.robokassa.ru" target="_blank">Robokassa</a> gateway for WooCommerce. Supports russian law 54-FZ
-  Version: 1.0.4
+  Version: 1.0.5
   Author: Ivan Artamonov
   Author URI: https://artamonoviv.ru
   Plugin URI: https://github.com/artamonoviv/robowoo
