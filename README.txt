@@ -5,7 +5,7 @@ Plugin URI: https://github.com/artamonoviv/robowoo
 Tags: robocassa, robokassa, visa, mastercard, visa, woo commerce, woocommerce, ecommerce, gateway, woo robokassa, robo, merchant, woo, woo robo
 Requires at least: 4.0
 Requires PHP: 5.4.0
-Tested up to: 5.2.1
+Tested up to: 5.2.2
 Stable tag: trunk
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
@@ -25,8 +25,9 @@ RoboWoo расширяет платежные способности WooCommerce
 <li>Включать / выключать передачу информации о стоимости доставки в Робокассу</li>
 <li>Выбирать систему налогооблажения для передачи в Робокассу, если нужно</li>
 <li>Выбирать размер ставки НДС для товаров в заказе, если нужно</li>
-<li>Выбирать способ расчета: 100% предоплата, аванс, кредит и пр.</li>
+<li>Выбирать способ расчета: полный расчет, 100% предоплата, аванс, кредит и пр.</li>
 <li>Выбирать предмет расчета: товар, подакцизный товар, услуга, работа, агентское вознаграждение и пр.</li>
+<li>Формировать второй (итоговый) чек для товаров, которые были оформлены по предоплате или авансу (тестовый режим).</li>
 </ul>
 
 == Installation ==
@@ -69,6 +70,11 @@ RoboWoo расширяет платежные способности WooCommerce
 
 
 == Changelog ==
+
+= 1.0.6 =
+* Метод расчета по-умолчанию: "Полный расчет".
+* Для тестирования добавлена функция формирования второго чека.
+* Подтверждена совместимость с WordPress 5.2.2
 
 = 1.0.5 =
 * Подтверждена совместимость с WordPress 5.2.1

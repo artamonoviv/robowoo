@@ -2,7 +2,7 @@
 /*
   Plugin Name: RoboWoo — Robokassa payment gateway for WooCommerce
   Description: Provides a <a href="https://www.robokassa.ru" target="_blank">Robokassa</a> gateway for WooCommerce. Supports russian law 54-FZ
-  Version: 1.0.5
+  Version: 1.0.6
   Author: Ivan Artamonov
   Author URI: https://artamonoviv.ru
   Plugin URI: https://github.com/artamonoviv/robowoo
@@ -41,6 +41,7 @@ function init_woocommerce_robokassa()
 			$this->method_description = "Позволяет принимать платежы через систему Робокасса";
 			$this->has_fields = false;
 			$this->robokassa_url = 'https://auth.robokassa.ru/Merchant/Index.aspx';
+			$this->robokassa_second_url = 'https://ws.roboxchange.com/RoboFiscal/Receipt/Attach';
 			
 			$this->init_form_fields();
 			$this->init_settings();
@@ -57,14 +58,14 @@ function init_woocommerce_robokassa()
 			$this->include_shipping =    ( isset( $this->settings['include_shipping'] ) ) ? $this->settings['include_shipping'] : '';
 			$this->sno =                 ( isset( $this->settings['sno'] ) ) ? $this->settings['sno'] : '';
 			$this->tax =                 ( isset( $this->settings['tax'] ) ) ? $this->settings['tax'] : 'none';
-			$this->payment_method =      ( isset( $this->settings['payment_method'] ) ) ? $this->settings['payment_method'] : 'full_prepayment';
+			$this->payment_method =      ( isset( $this->settings['payment_method'] ) ) ? $this->settings['payment_method'] : 'full_payment';
 			$this->payment_object =      ( isset( $this->settings['payment_object'] ) ) ? $this->settings['payment_object'] : 'commodity';
 			$this->if_fail =             ( isset( $this->settings['if_fail'] ) ) ? $this->settings['if_fail'] : 'retry';
 			$this->lang =                ( isset( $this->settings['lang'] ) ) ? $this->settings['lang'] : 'ru';		
 			$this->description =         ( isset( $this->settings['description'] ) ) ? $this->settings['description'] : '';
 			$this->submit_button_class = ( isset( $this->settings['submit_button_class'] ) ) ? $this->settings['submit_button_class'] : '';
 			$this->cancel_button_class = ( isset( $this->settings['submit_button_class'] ) ) ? $this->settings['cancel_button_class'] : '';
-			
+						
 			if ( $this->debug == 'yes' ){
 				$this->log = new WC_Logger();
 			}			
@@ -184,8 +185,8 @@ function init_woocommerce_robokassa()
 					'payment_method' => array(
 						'title' => 'Признак способа расчёта',
 						'type' => 'select', 
-						'description' => 'Способ расчета, который будет передан в чек. Обычно достаточно указать "Предоплата 100%". Полное описание полей находится на сайте Робокассы: <a href="https://docs.robokassa.ru/#7508">https://docs.robokassa.ru/#7508</a>',
-						'default' => 'full_prepayment',
+						'description' => 'Способ расчета, который будет передан в чек. Обычно достаточно указать "Полный расчет". Полное описание полей находится на сайте Робокассы: <a href="https://docs.robokassa.ru/#7508">https://docs.robokassa.ru/#7508</a>',
+						'default' => 'full_payment',
 						'options' => array(
 							'full_prepayment' => 'Предоплата 100%',
 							'prepayment' => 'Частичная предоплата',
@@ -289,6 +290,14 @@ function init_woocommerce_robokassa()
 				);
 		}
 		
+		function gl($message)
+		{
+			if ( $this->debug == 'yes' )
+			{
+				$this->log->add( $this->id, $message );
+			}
+		}
+		
 		function process_payment( $order_id ) {
 			$order = wc_get_order( $order_id );
 			return array (
@@ -296,69 +305,40 @@ function init_woocommerce_robokassa()
 				'redirect'	=> add_query_arg('order-pay', $order->id, add_query_arg('key', $order->order_key, get_permalink(woocommerce_get_page_id('pay'))))
 			);
 		}
-		
-		private function generate_receipt( $order_id ) {
-			
-			$order = wc_get_order( $order_id ); 
-			
-			$items=array();
-			foreach ( $order->get_items('line_item') as $item_id => $item_data )
-			{
-				$product = $item_data->get_product();
-				array_push (
-					$items, 
-					array(
-						'name'=>     $product->get_name(),
-						'quantity'=> $item_data->get_quantity(),
-						'sum' =>     $item_data->get_total(),
-						'payment_method'=>$this->payment_method,
-						'payment_object'=>$this->payment_object,
-						'tax'=>      $this->tax
-					)
-				);
-			}		;
-			
-			if( $this->include_shipping == 'yes' ) {				
-				foreach ( $order->get_items( 'shipping' ) as $item_id => $item_data )
-				{
-					if ($item_data->get_total() != 0)
-					{
-						array_push (
-							$items, 
-							array(
-								'name'=>     $item_data->get_name(),
-								'quantity'=> 1,
-								'sum' =>     $item_data->get_total(),
-								'tax'=>      $this->tax
-							)
-						);
-					}
-				}
-			}
-			
-			$arr = array( 'items' => $items );
-			
-			if( $this->sno_enabled == 'yes' ) {
-				$arr['sno'] = $this->sno;
-			}
-						
-			return urlencode(json_encode($arr, JSON_UNESCAPED_UNICODE));
-		}	
-
-
+	
 		function receipt_page( $order_id ) {
-			
-			global $woocommerce;
 
 			$order = wc_get_order( $order_id );
-			$action_adr = $this->robokassa_url;
-
-			$out_summ = number_format($order->order_total, 2, '.', '');
+					
+			$args = $this->receipt_params( $order ); 
+			
+			$action_adr = $this->robokassa_url;	
+			
+			$args_array = array();
+			
+			foreach ( $args as $key => $value ) {
+				array_push ($args_array, '<input type="hidden" name="'.esc_attr($key).'" value="'.esc_attr($value).'" />');
+			}
+			
+			echo '<form action="'.esc_url($action_adr).'" method="post" id="robokassa_form">';
+			echo implode('', $args_array);
+			echo '<input type="submit" class="'.$this->submit_button_class.'" id="robokassa_form_submit" value="Оплатить" /> <a class="'.$this->cancel_button_class.'" id="robokassa_form_cancel" href="'.$order->get_cancel_order_url().'">Отмена</a></form>';
+			
+			$this->gl('Сгенерирована форма для оплаты заказа №'.$order_id );
+		}
+		
+		function receipt_params( $order )
+		{	
+			global $woocommerce;
+			
+			$order_id = $order->get_id();
+			
+			$out_summ = number_format($order->get_total(), 2, '.', '');
 			
 			$crc=array( $this->robokassa_merchant, $out_summ, $order_id );
 			
 			if( $this->receipt == 'yes' ) {
-				$receipt=$this->generate_receipt( $order_id );
+				$receipt=urlencode(json_encode($this->generate_receipt( $order ), JSON_UNESCAPED_UNICODE));
 				array_push ( $crc, $receipt );
 			}
 			
@@ -385,8 +365,8 @@ function init_woocommerce_robokassa()
 				$args['IsTest'] = 1;
 			}
 						
-			if( !empty( $order->billing_email ) ) {
-				$args['Email'] = $order->billing_email;
+			if( $order->get_billing_email() ) {
+				$args['Email'] = $order->get_billing_email();
 			}
 
 			if( !empty( $this->outsumcurrency ) ) {
@@ -394,22 +374,57 @@ function init_woocommerce_robokassa()
 			}
 			
 			$args = apply_filters('woocommerce_robokassa_args', $args);
-
-			$args_array = array();
 			
-			foreach ( $args as $key => $value ) {
-				array_push ($args_array, '<input type="hidden" name="'.esc_attr($key).'" value="'.esc_attr($value).'" />');
-			}
-			
-			echo '<form action="'.esc_url($action_adr).'" method="post" id="robokassa_form">';
-			echo implode('', $args_array);
-			echo '<input type="submit" class="'.$this->submit_button_class.'" id="robokassa_form_submit" value="Оплатить" /> <a class="'.$this->cancel_button_class.'" id="robokassa_form_cancel" href="'.$order->get_cancel_order_url().'">Отмена</a></form>';
-			
-			if ( $this->debug == 'yes' ) {
-				$this->log->add( $this->id,'Сгенерирована форма для оплаты заказа №'.$order_id );
-			}
+			return $args;
 		}
 	
+		function generate_receipt( $order ) {
+						
+			$items=array();
+			foreach ( $order->get_items('line_item') as $item_id => $item_data )
+			{
+				$product = $item_data->get_product();
+				array_push (
+					$items, 
+					array(
+						'name'=>     $product->get_name(),
+						'quantity'=> $item_data->get_quantity(),
+						'sum' =>     $item_data->get_total(),
+						'payment_method'=>$this->payment_method,
+						'payment_object'=>$this->payment_object,
+						'tax'=>      $this->tax
+					)
+				);
+			};
+			
+			if( $this->include_shipping == 'yes' ) {				
+				foreach ( $order->get_items( 'shipping' ) as $item_id => $item_data )
+				{
+					if ($item_data->get_total() != 0)
+					{
+						array_push (
+							$items, 
+							array(
+								'name'=>     $item_data->get_name(),
+								'quantity'=> 1,
+								'sum' =>     $item_data->get_total(),
+								'tax'=>      $this->tax
+							)
+						);
+					}
+				}
+			}
+			
+			$arr = array( 'items' => $items );
+			
+			if( $this->sno_enabled == 'yes' ) {
+				$arr['sno'] = $this->sno;
+			}
+						
+			return $arr;
+		}
+
+		
 		function check_ipn_response(){
 			
 			global $woocommerce;
@@ -433,15 +448,19 @@ function init_woocommerce_robokassa()
 					$order->payment_complete();
 					$woocommerce->cart->empty_cart();
 					
-					if ( $this->debug == 'yes' ) {
-						$this->log->add( $this->id,'Платеж успешно завершен для заказа №'.$inv_id );
+					$this->gl('Платеж успешно завершен для заказа №'.$inv_id );
+					
+					if($this->payment_method == 'prepayment' || $this->payment_method == 'advance')
+					{
+						add_post_meta($order->get_id(), 'robokassa_total', $order->get_total());
+						$order->add_order_note('Для правильного формирования итогового чека по заказу заполните поле robokassa_total итоговой стоимостью.');
 					}
 					
 				} else {
 					$order->add_order_note('Платеж не прошел: ошибочный ответ от платежной системы!');
-					if ( $this->debug == 'yes' ) {
-						$this->log->add( $this->id,'Проверка ответа от Робокассы не удалась для заказа №'.$inv_id );
-					}					
+
+					$this->gl('Проверка ответа от Робокассы не удалась для заказа №'.$inv_id );
+
 					wp_die('IPN Request Failure');
 				}
 			} elseif ( isset($_GET['robokassa']) AND $_GET['robokassa'] == 'success' ) {
@@ -450,9 +469,7 @@ function init_woocommerce_robokassa()
 				
 				if ( !is_object($order) ) {
 					
-					if ( $this->debug == 'yes' ) {
-						$this->log->add( $this->id,'Робокасса вернула заказ №'.$inv_id.', но WooCommerce не нашел заказ с таким номером!');
-					}
+					$this->gl('Робокасса вернула заказ №'.$inv_id.', но WooCommerce не нашел заказ с таким номером!');
 					
 					$url = wc_get_account_endpoint_url( 'orders' );
 					wp_redirect( str_replace( '&amp;', '&', $url ) );
@@ -463,9 +480,7 @@ function init_woocommerce_robokassa()
 
 				$url = $order->get_checkout_order_received_url();
 				
-				if ( $this->debug == 'yes' ) {
-					$this->log->add( $this->id,'Клиент пришел с Робокассы по заказу №'.$inv_id.' и перенаправлен на адрес '.$url );
-				}	
+				$this->gl('Клиент пришел с Робокассы по заказу №'.$inv_id.' и перенаправлен на адрес '.$url );
 				
 				wp_redirect( str_replace('&amp;', '&', $url ) );
 			}
@@ -475,9 +490,7 @@ function init_woocommerce_robokassa()
 				
 				if (!is_object($order)) {
 					
-					if ( $this->debug == 'yes' ) {
-						$this->log->add( $this->id,'Робокасса вернула заказ №'.$inv_id.', но WooCommerce не нашел заказ с таким номером!');
-					}
+					$this->gl('Робокасса вернула заказ №'.$inv_id.', но WooCommerce не нашел заказ с таким номером!');
 					
 					$url = wc_get_account_endpoint_url( 'orders' );
 					wp_redirect( str_replace( '&amp;', '&', $url ) );
@@ -487,9 +500,7 @@ function init_woocommerce_robokassa()
 				
 				$order->add_order_note('Платеж не прошел: Робокасса сообщает об ошибке!');
 				
-				if ( $this->debug == 'yes' ) {
-					$this->log->add( $this->id,'Клиент пришел с Робокассы по заказу №'.$inv_id.', который НЕ был успешно оплачен' );
-				}
+				$this->gl('Клиент пришел с Робокассы по заказу №'.$inv_id.', который НЕ был успешно оплачен' );
 				
 				if( $this->if_fail == 'retry' ) {
 					wp_redirect( str_replace( '&amp;', '&', $order->get_checkout_payment_url() ) );
@@ -525,5 +536,251 @@ function init_woocommerce_robokassa()
 			return false;
 		}
 	}
+
+	add_action( 'woocommerce_order_actions', 'robowoo_second_receipt_add_action' );
+
+	add_action( 'woocommerce_order_action_robowoo_second_receipt', 'robowoo_second_receipt_action' );
+	
+	add_action('admin_notices', 'robowoo_second_receipt_notice');
+	
 }
+
+function robowoo_second_receipt_add_action( $actions ) {
+	
+	global $theorder;
+	
+	if ( ! is_object( $theorder ) ) {
+		$theorder = wc_get_order( $post->ID );
+	}
+	
+	$payment_gateways = get_payment_gateways();
+	
+	$payment_method = $theorder->get_payment_method();
+			
+	if (!isset( $payment_gateways[ $payment_method ] )) return $actions;
+	if ($payment_gateways[ $payment_method ]->id != 'robokassa') return $actions;
+	if (!need_second_receipt($payment_gateways)) return $actions;
+	if (get_post_meta( $theorder->get_id(), 'robokassa_disable_second_receipt', true ))  return $actions;
+	if (get_post_meta( $theorder->get_id(), 'robokassa_OpKey', true ))  return $actions;
+	
+	$actions['robowoo_second_receipt'] = 'Сформировать второй чек (тестовый режим)';
+	
+	return $actions;
+}
+
+function get_payment_gateways() {
+	if ( WC()->payment_gateways() ) {
+		return WC()->payment_gateways->payment_gateways();
+	} else {
+		return array();
+	}		
+}
+
+function robowoo_second_receipt_action( $order ) {
+	
+	$data =  generate_request_data($order);
+	
+	$robowoo = get_robowoo($order);
+	
+	$url = $robowoo->robokassa_second_url;
+			
+	$ch = curl_init();
+
+	curl_setopt($ch, CURLOPT_URL,            $url );
+	curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1 );
+	curl_setopt($ch, CURLOPT_POST,           1 );
+	curl_setopt($ch, CURLOPT_POSTFIELDS,     $data ); 
+	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+	curl_setopt($ch, CURLOPT_HTTPHEADER,     array('Content-Type: text/plain')); 
+
+	$result=curl_exec ($ch);
+	
+	$error = '';
+	
+	if (curl_errno($ch)) {
+		$msg = curl_error($ch);
+		
+		$error = sprintf('По заказу %s произошла ошибка отправки POST-запроса для второго чека %s', $order->get_id(), $msg);
+	}
+	
+	if (!$result) {
+		$error = sprintf('По заказу %s произошла ошибка отправки POST-запроса для второго чека', $order->get_id());
+	}
+	
+	curl_close ($ch);
+	
+	$answer = json_decode($result, TRUE);
+	
+	if(isset($answer['ResultCode'])) {
+		if ($answer['ResultCode'] == '0') {
+			$order->add_order_note('Успешно отправлен второй чек');
+			add_post_meta($order->get_id(), 'robokassa_disable_second_receipt', 1);
+			add_post_meta($order->get_id(), 'robokassa_OpKey', $answer['OpKey']);
+			wp_trash_post( $fake_order->get_id() );
+		}
+		else {
+			$error = sprintf('По заказу %s получен неверный ответ от Робокассы при отправке второго чека. ResultCode: %s, ResultDescription: %s', $order->get_id(), $answer['ResultCode'], $answer['ResultDescription'] );
+		}
+		
+	}
+	else {
+		$error = sprintf('По заказу %s получен неверный ответ от Робокассы при отправке второго чека: %s', $order->get_id(), $result);
+	}
+	
+	if ($error) {
+		$order->add_order_note($error);
+		$robowoo->gl($error);	
+	}
+}
+
+function get_robowoo($order) {
+	
+	$payment_gateways = get_payment_gateways();
+	
+	$payment_method = $order->get_payment_method();
+	
+	$robowoo = $payment_gateways[ $payment_method ];
+	
+	return $robowoo;
+}
+
+function generate_request_data($order) {
+	
+	$fake_order = create_second_order($order);
+
+	$robowoo = get_robowoo($order);
+	
+	$arr = generate_second_receipt($robowoo, $order, $fake_order);
+	
+	$receipt = json_encode($arr, JSON_UNESCAPED_UNICODE);
+	
+	$receipt = stupid_robokassa_rules_1($receipt);
+	
+	$base64 = base64_encode($receipt);
+	
+	$base64 = rtrim($base64, '='); 
+	
+	$hash = hash($robowoo->hashcode, $base64.$robowoo->robokassa_key1);
+	
+	$base64_sign = base64_encode($hash);
+	
+	$base64_sign = rtrim($base64_sign, '='); 
+	
+	$data = $base64.'.'.$base64_sign;
+
+	return $data;
+}
+
+function stupid_robokassa_rules_1($receipt) {
+	$receipt = str_replace('+','-',$receipt);
+	$receipt = str_replace('/','_',$receipt);
+	return $receipt;
+}
+
+function generate_second_receipt( $robowoo, $order, $fake_order ) {
+			
+	$arr = $robowoo -> generate_receipt( $order );
+	
+	$tax_sum = get_post_meta( $order->get_id(), 'robokassa_tax', true );
+			
+	if($robowoo->tax != 'none' && !$tax_sum){
+		
+		add_post_meta($fake_order->get_id(), 'robokassa_tax', 0);
+		
+		$this->gl(sprintf('Попытка сформировать второй чек для заказа %s не удалась, так как нет информации о сумме НДС к заказу.', $order->get_id()));
+		
+		$order->add_order_note('Не могу сфомировать второй чек, пока не будет выставлена сумма НДС в полях заказа. Внесите сумму налога к заказу в поле robokassa_tax');
+										
+		$url = add_query_arg(  array('post'=> $order->get_id(), 'action'=>'edit' ) );
+				
+		wp_redirect(   $url  ); 
+		
+		exit; 
+	}
+	
+	if (empty($tax_sum)) {
+		$tax_sum = 0;
+	}
+	else {
+		$tax_sum = number_format($tax_sum, 2, '.', '');
+	}
+	
+	$total = get_post_meta( $order->get_id(), 'robokassa_total', true );
+	
+	if (!$total) {
+		$total = $order->get_total();
+	}
+
+	$arr['merchantId'] = $robowoo->robokassa_merchant;
+	$arr['id'] = $fake_order->get_id();
+	$arr['originId'] = $order->get_id();
+	$arr['operation'] = 'sell';
+	//$arr['url'] = get_site_url();
+	$arr['total'] = number_format($total, 2, '.', '');
+	
+	if ($order->get_billing_email()) $arr['client']['email'] = $order->get_billing_email();
+	if ($order->get_billing_phone()) $arr['client']['phone'] = $order->get_billing_phone();
+	
+	$arr['payments'] = array(array('type'=> 2, 'sum'=> $arr['total']));
+	
+	$arr['vats'] = array(array('type'=> $robowoo->tax, 'sum'=> $tax_sum));
+	
+	return $arr;
+}
+
+
+function create_second_order( $order ) {
+	
+	global $woocommerce;
+	
+	$orders = wc_get_orders( array('parent' => $order->get_id(), 'status' => 'cancelled') );
+	
+	if (!empty($orders)) {
+		 foreach ($orders as $current_order){
+			if (get_post_meta( $current_order->get_id(), 'robokassa_fake_order', true)){
+				return $current_order;
+			}
+		 }
+	}			
+	
+	$message = sprintf('Это псевдо-заказ для второго чека по заказу №%s', $order->get_id());
+	
+	$fake_order = wc_create_order(
+		array(
+		'status'        => 'wc-cancelled',
+		'customer_note' => $message,
+		'parent'        => $order->get_id(),
+		'created_via'   => 'Robowoo'
+		)
+	);
+	
+	$payment_gateways = WC()->payment_gateways->payment_gateways();
+	
+	$fake_order->set_payment_method($payment_gateways['robokassa']);
+		
+	$fake_order->add_order_note( $message );
+	
+	add_post_meta($fake_order->get_id(), 'robokassa_fake_order', 1);
+	add_post_meta($fake_order->get_id(), 'robokassa_disable_second_receipt', 1);		
+	
+	$fake_order->save();
+	
+	return $fake_order;
+}		
+
+function need_second_receipt($payment_gateways) {
+	if (isset($payment_gateways['robokassa']) && $payment_gateways['robokassa']->enabled == 'yes' && ($payment_gateways['robokassa']->payment_method == 'full_prepayment' 	|| $payment_gateways['robokassa']->payment_method == 'prepayment' || $payment_gateways['robokassa']->payment_method == 'advance' ) )
+	{
+		return true;
+	}
+	return false;
+	
+}
+
+function robowoo_second_receipt_notice() { 	
+	if (need_second_receipt (get_payment_gateways()) ) {
+		echo '<div class="notice notice-error"><p>Внимание! Режим работы с итоговыми чеками функционирует нестабильно! Крайне не рекомендуется его пока использовать!</p></div>';		
+	}
+}
+
 ?>
